@@ -23,8 +23,8 @@ class Side:
 
 
 SIDES: tuple[Side, Side] = (
-    Side("home", "Хозяева", "#c62828", "▲"),
-    Side("away", "Гости", "#1565c0", "●"),
+    Side("home", "Хозяева", "#6d7682", "▲"),
+    Side("away", "Гости", "#3d5168", "●"),
 )
 
 

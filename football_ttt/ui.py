@@ -5,8 +5,8 @@ from __future__ import annotations
 import random
 import sys
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor, QFont, QPainter, QPen
+from PyQt6.QtCore import Qt, QRect
+from PyQt6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
 from PyQt6.QtWidgets import (
     QApplication,
     QDialog,
@@ -22,35 +22,76 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from football_ttt.flags import paint_club_flag
 from football_ttt.game import SIDES, Match
 
-
-def _readable(hex_color: str) -> str:
-    color = QColor(hex_color)
-    luminance = 0.299 * color.red() + 0.587 * color.green() + 0.114 * color.blue()
-    return "#111111" if luminance > 160 else "#f7f7f7"
+CELL = 124
 
 
-class ClubBadge(QLabel):
-    def __init__(self, name: str, primary: str, secondary: str) -> None:
-        super().__init__(name)
-        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.setWordWrap(True)
-        self.setMinimumSize(132, 72)
-        ink = _readable(primary)
-        self.setStyleSheet(
-            "QLabel {"
-            f"background: {primary}; color: {ink};"
-            f"border: 3px solid {secondary}; border-radius: 10px;"
-            "font-weight: 700; padding: 6px;"
-            "}"
+class ClubBadge(QWidget):
+    def __init__(self) -> None:
+        super().__init__()
+        self._name = ""
+        self.setFixedSize(CELL, CELL)
+
+    def set_club(self, name: str) -> None:
+        self._name = name
+        self.update()
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        outer = QRect(1, 1, self.width() - 2, self.height() - 2)
+        path = QPainterPath()
+        path.addRoundedRect(float(outer.x()), float(outer.y()), float(outer.width()), float(outer.height()), 8, 8)
+        painter.setClipPath(path)
+        paint_club_flag(painter, self.rect(), self._name)
+        painter.fillRect(self.rect(), QColor(16, 20, 28, 120))
+        painter.setClipping(False)
+        painter.setPen(QPen(QColor("#2c3340"), 2))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRoundedRect(outer, 8, 8)
+        font = QFont()
+        font.setPointSize(10)
+        font.setBold(True)
+        painter.setFont(font)
+        text_rect = outer.adjusted(8, 8, -8, -8)
+        painter.setPen(QColor(8, 10, 14, 180))
+        painter.drawText(text_rect.adjusted(1, 1, 1, 1), Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, self._name)
+        painter.setPen(QColor("#f4f6f8"))
+        painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, self._name)
+        painter.end()
+
+
+class CornerLabel(QWidget):
+    def __init__(self) -> None:
+        super().__init__()
+        self.setFixedSize(CELL, CELL)
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        outer = QRect(1, 1, self.width() - 2, self.height() - 2)
+        painter.setPen(QPen(QColor("#2c3340"), 2))
+        painter.setBrush(QColor("#2a3140"))
+        painter.drawRoundedRect(outer, 8, 8)
+        painter.setPen(QColor("#d5dae3"))
+        font = QFont()
+        font.setPointSize(10)
+        font.setBold(True)
+        painter.setFont(font)
+        painter.drawText(
+            outer.adjusted(6, 6, -6, -6),
+            Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap,
+            "строка ↓\nстолбец →",
         )
+        painter.end()
 
 
 class CellButton(QPushButton):
     def __init__(self) -> None:
         super().__init__()
-        self.setFixedSize(118, 118)
+        self.setFixedSize(CELL, CELL)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self._owner: int | None = None
         self._highlight = False
@@ -65,11 +106,11 @@ class CellButton(QPushButton):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         rect = self.rect().adjusted(6, 6, -6, -6)
-        painter.setPen(QPen(QColor("#e8f5e9"), 2))
-        painter.setBrush(QColor(27, 94, 32, 210))
+        painter.setPen(QPen(QColor("#8b93a1"), 2))
+        painter.setBrush(QColor("#323a48"))
         painter.drawRoundedRect(rect, 8, 8)
         if self._highlight and self._owner is None:
-            painter.setPen(QPen(QColor("#ffeb3b"), 3))
+            painter.setPen(QPen(QColor("#c5ceda"), 3))
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRoundedRect(rect.adjusted(2, 2, -2, -2), 6, 6)
         if self._owner is None:
@@ -98,10 +139,12 @@ class PlayerDialog(QDialog):
         self.setModal(True)
         self.accepted_name: str | None = None
         self.setStyleSheet(
-            "QDialog { background: #102418; color: #f4fff6; }"
-            "QLabel { color: #f4fff6; }"
-            "QLineEdit { background: #ffffff; color: #102418; padding: 6px; border-radius: 6px; }"
-            "QPushButton { padding: 8px 14px; border-radius: 8px; font-weight: 700; }"
+            "QDialog { background: #1c2330; color: #e6e9ef; }"
+            "QLabel { color: #e6e9ef; }"
+            "QLineEdit { background: #e7e9ee; color: #1c2330; padding: 6px; border-radius: 6px; }"
+            "QPushButton { background: #3a4454; color: #e8eaee; padding: 8px 14px;"
+            "border-radius: 8px; font-weight: 700; }"
+            "QPushButton:hover { background: #4a5568; }"
         )
         layout = QVBoxLayout(self)
         title = QLabel(f"Ход: {side_title}")
@@ -151,7 +194,7 @@ class MainWindow(QMainWindow):
 
     def _build(self) -> None:
         root = QWidget()
-        root.setStyleSheet("background: #0c1a12; color: #f4fff6;")
+        root.setStyleSheet("background: #161a22; color: #d5d8de;")
         self.setCentralWidget(root)
         outer = QVBoxLayout(root)
         outer.setContentsMargins(18, 16, 18, 16)
@@ -166,27 +209,24 @@ class MainWindow(QMainWindow):
 
         pitch = QFrame()
         pitch.setStyleSheet(
-            "QFrame#pitch { background: #1b5e20; border: 4px solid #e8f5e9; border-radius: 16px; }"
+            "QFrame#pitch { background: #1c2330; border: 4px solid #3d4654; border-radius: 16px; }"
         )
         pitch.setObjectName("pitch")
         grid = QGridLayout(pitch)
         grid.setSpacing(8)
         grid.setContentsMargins(12, 12, 12, 12)
 
-        corner = QLabel("строка ↓\nстолбец →")
-        corner.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        corner.setStyleSheet("color: #e8f5e9;")
-        grid.addWidget(corner, 0, 0)
+        grid.addWidget(CornerLabel(), 0, 0)
 
         self.col_badges: list[ClubBadge] = []
         self.row_badges: list[ClubBadge] = []
         self.cells: list[list[CellButton]] = []
         for col in range(3):
-            badge = ClubBadge("", "#1b5e20", "#e8f5e9")
+            badge = ClubBadge()
             self.col_badges.append(badge)
             grid.addWidget(badge, 0, col + 1)
         for row in range(3):
-            badge = ClubBadge("", "#1b5e20", "#e8f5e9")
+            badge = ClubBadge()
             self.row_badges.append(badge)
             grid.addWidget(badge, row + 1, 0)
             row_cells: list[CellButton] = []
@@ -208,18 +248,18 @@ class MainWindow(QMainWindow):
         restart = QPushButton("Новый матч")
         restart.setCursor(Qt.CursorShape.PointingHandCursor)
         restart.setStyleSheet(
-            "QPushButton { background: #ffeb3b; color: #102418; padding: 10px 16px;"
+            "QPushButton { background: #3a4454; color: #e8eaee; padding: 10px 16px;"
             "border-radius: 8px; font-weight: 700; }"
-            "QPushButton:hover { background: #fff176; }"
+            "QPushButton:hover { background: #4a5568; }"
         )
         restart.clicked.connect(self._new_match)
         outer.addWidget(restart, alignment=Qt.AlignmentFlag.AlignLeft)
 
     def _refresh(self) -> None:
         for index, club in enumerate(self.match.cols):
-            self._paint_badge(self.col_badges[index], club.name, club.primary, club.secondary)
+            self.col_badges[index].set_club(club.name)
         for index, club in enumerate(self.match.rows):
-            self._paint_badge(self.row_badges[index], club.name, club.primary, club.secondary)
+            self.row_badges[index].set_club(club.name)
         for row in range(3):
             for col in range(3):
                 owner = self.match.cells[row][col]
@@ -236,18 +276,6 @@ class MainWindow(QMainWindow):
         if self._note and not self.match.finished:
             text = f"{self._note} {text}"
         self.status.setText(text)
-
-    @staticmethod
-    def _paint_badge(badge: ClubBadge, name: str, primary: str, secondary: str) -> None:
-        badge.setText(name)
-        ink = _readable(primary)
-        badge.setStyleSheet(
-            "QLabel {"
-            f"background: {primary}; color: {ink};"
-            f"border: 3px solid {secondary}; border-radius: 10px;"
-            "font-weight: 700; padding: 6px;"
-            "}"
-        )
 
     def _on_cell(self, row: int, col: int) -> None:
         if self._busy or self.match.finished or self.match.occupied(row, col):
