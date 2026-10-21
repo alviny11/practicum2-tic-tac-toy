@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import random
 import sys
 
 from PyQt6.QtCore import Qt, QRect
@@ -22,6 +21,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from football_ttt.agent import AgentError, verify_answer
 from football_ttt.flags import paint_club_flag
 from football_ttt.game import SIDES, Match
 
@@ -180,9 +180,8 @@ class PlayerDialog(QDialog):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, rng: random.Random | None = None) -> None:
+    def __init__(self) -> None:
         super().__init__()
-        self._rng = rng or random.Random()
         self.match = Match()
         self._busy = False
         self._last: tuple[int, int] | None = None
@@ -297,16 +296,26 @@ class MainWindow(QMainWindow):
             self.match.pass_turn()
             self._note = "Футболист не назван. Клетка пустая, ход переходит сопернику."
             return
-        correct = self._rng.random() < 0.5
-        player_name = dialog.accepted_name
-        if not correct:
+        self._note = "Проверяем ответ…"
+        self._refresh()
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        QApplication.processEvents()
+        try:
+            verdict = verify_answer(dialog.accepted_name or "", row_club.name, col_club.name)
+        except AgentError as exc:
+            self._note = f"Проверка не удалась: {exc} Ход остаётся вашим."
+            return
+        finally:
+            QApplication.restoreOverrideCursor()
+        shown = verdict.player_name or dialog.accepted_name
+        if not verdict.accepted:
             self.match.pass_turn()
-            self._note = f"«{player_name}» не засчитан. Клетка пустая, ход переходит сопернику."
+            self._note = f"«{shown}» не засчитан. {verdict.reason} Ход переходит сопернику."
             return
         self.match.claim(row, col)
         self._last = (row, col)
         side = SIDES[self.match.cells[row][col]]  # type: ignore[index]
-        self._note = f"«{player_name}» засчитан. Клетку забрали {side.title}."
+        self._note = f"«{shown}» засчитан. {verdict.reason} Клетку забрали {side.title}."
         if self.match.finished:
             self._announce_end()
 
